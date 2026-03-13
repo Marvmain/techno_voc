@@ -252,9 +252,6 @@ export default function LoginPage({ onLogin }: Props) {
                 onChange={(e) => setPassword(e.target.value)}
                 style={inputStyle}
               />
-              <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
-                Default password: admin123
-              </p>
             </div>
             <button
               onClick={handleAdminLogin}
@@ -265,7 +262,6 @@ export default function LoginPage({ onLogin }: Props) {
             </button>
           </div>
         )}
-
       </div>
     </div>
   )

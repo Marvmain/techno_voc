@@ -136,7 +136,7 @@ export function printStudentResults(opts: PrintResultsOptions) {
   <div class="header">
     <h1>TECHNO-VOC</h1>
     <p>Technical-Vocational Assessment Results</p>
-    <p>University of Antique — NAVS</p>
+    <p> Northern Antique Vocational School — NAVS</p>
   </div>
 
   <!-- Student Info -->
