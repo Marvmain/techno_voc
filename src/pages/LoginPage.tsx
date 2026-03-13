@@ -130,7 +130,7 @@ export default function LoginPage({ onLogin }: Props) {
           Assessment for TVE Strands
         </p>
         <p style={{ textAlign: "center", color: "#6b7280", margin: "0 0 24px", fontSize: "14px" }}>
-          University of Antique - NAVS
+          Nothern Antique Vocational School - NAVS
         </p>
 
         {/* Tab Toggle */}
