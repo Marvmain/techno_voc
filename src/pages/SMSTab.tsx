@@ -295,7 +295,7 @@ export default function SMSTab() {
             <thead>
               <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
                 <th style={{ padding: "10px 12px", width: "40px" }}></th>
-                {["Full Name", "LRN", "Phone Number", "School Year", "Registered"].map(h => (
+                {["Full Name", "LRN", "Phone Number", "School Year", "Registered",].map(h => (
                   <th key={h} style={{ textAlign: "left", padding: "10px 12px", color: "#6b7280", fontWeight: "600" }}>{h}</th>
                 ))}
               </tr>

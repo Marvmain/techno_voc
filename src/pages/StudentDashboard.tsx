@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase } from "../supabaseClient"
 import StudentResults from "./StudentResults"
 
@@ -39,6 +39,20 @@ export default function StudentDashboard({ studentId, studentName, onLogout }: P
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(false)
   const [alreadyTaken, setAlreadyTaken] = useState(false)
+  const [timerEnabled, setTimerEnabled] = useState(true)
+  const [timerMinutes, setTimerMinutes] = useState(60)       // default 60 mins
+  const [timeLeft, setTimeLeft] = useState(0)                // in seconds
+  const [timerStarted, setTimerStarted] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // helper for countdown formatting and warning/danger flags
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, "0")
+    const s = (seconds % 60).toString().padStart(2, "0")
+    return `${m}:${s}`
+  }
+  const isWarning = timeLeft <= 300 && timeLeft > 0   // last 5 mins = yellow
+  const isDanger  = timeLeft <= 60  && timeLeft > 0   // last 1 min  = red
 
   useEffect(() => { checkIfAlreadyTaken() }, [])
 
@@ -50,6 +64,24 @@ export default function StudentDashboard({ studentId, studentName, onLogout }: P
       .limit(1)
     if (data && data.length > 0) setAlreadyTaken(true)
   }
+        useEffect(() => {
+        if (!timerStarted || !timerEnabled) return
+      
+        timerRef.current = setInterval(() => {
+          setTimeLeft(prev => {
+            if (prev <= 1) {
+              clearInterval(timerRef.current!)
+              alert("⏰ Time is up! Your assessment will be submitted now.")
+              handleSubmit()
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+      
+        return () => { if (timerRef.current) clearInterval(timerRef.current) }
+      }, [timerStarted])
+      
 
   const loadQuestions = async () => {
     setLoading(true)
@@ -62,6 +94,8 @@ export default function StudentDashboard({ studentId, studentName, onLogout }: P
     // Shuffle questions
     const shuffled = [...data].sort(() => Math.random() - 0.5)
     setQuestions(shuffled)
+    setTimeLeft(timerMinutes * 60)
+    setTimerStarted(true)
     setStage("assessment")
   }
 
@@ -185,7 +219,52 @@ export default function StudentDashboard({ studentId, studentName, onLogout }: P
                 <p key={i} style={{ color: "#92400e", fontSize: "14px", margin: "0 0 6px" }}>• {item}</p>
               ))}
             </div>
-
+              {/* Timer Settings */}
+              <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "20px", marginBottom: "20px", border: "1px solid #e2e8f0" }}>
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+    <div>
+      <p style={{ fontWeight: "700", margin: "0 0 2px", fontSize: "14px" }}>⏱ Assessment Timer</p>
+      <p style={{ color: "#6b7280", fontSize: "12px", margin: 0 }}>Set a time limit for the assessment</p>
+    </div>
+    {/* Toggle switch */}
+    <div
+      onClick={() => setTimerEnabled(p => !p)}
+      style={{
+        width: "44px", height: "24px", borderRadius: "12px", cursor: "pointer",
+        backgroundColor: timerEnabled ? "#2563eb" : "#d1d5db",
+        position: "relative", transition: "background 0.2s"
+      }}
+    >
+      <div style={{
+        position: "absolute", top: "3px",
+        left: timerEnabled ? "23px" : "3px",
+        width: "18px", height: "18px", borderRadius: "50%",
+        backgroundColor: "white", transition: "left 0.2s",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+      }} />
+    </div>
+  </div>
+ 
+  {timerEnabled && (
+    <div style={{ display: "flex", gap: "8px" }}>
+      {[30, 45, 60, 90, 120].map(min => (
+        <button
+          key={min}
+          onClick={() => setTimerMinutes(min)}
+          style={{
+            flex: 1, padding: "8px 4px", borderRadius: "8px",
+            border: timerMinutes === min ? "2px solid #2563eb" : "2px solid #e5e7eb",
+            backgroundColor: timerMinutes === min ? "#eff6ff" : "white",
+            color: timerMinutes === min ? "#2563eb" : "#374151",
+            fontWeight: "700", cursor: "pointer", fontSize: "13px"
+          }}
+        >
+          {min}m
+        </button>
+      ))}
+    </div>
+  )}
+</div>
             <button onClick={loadQuestions} disabled={loading} style={{ ...btnDark, width: "100%", padding: "16px", fontSize: "16px" }}>
               {loading ? "Loading Questions..." : "📋 Start Assessment"}
             </button>
@@ -199,6 +278,8 @@ export default function StudentDashboard({ studentId, studentName, onLogout }: P
   if (stage === "assessment") {
     return (
       <div style={{ minHeight: "100vh", backgroundColor: "#f3f4f6", width: "100%" }}>
+      
+      
         {/* Header */}
         <div style={{ backgroundColor: "white", padding: "12px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e5e7eb" }}>
           <div>
@@ -206,6 +287,31 @@ export default function StudentDashboard({ studentId, studentName, onLogout }: P
             <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>
               Question {currentIndex + 1} of {questions.length} • Answered: {answeredCount}/{questions.length}
             </p>
+            {timerEnabled && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                backgroundColor: isDanger ? "#fef2f2" : isWarning ? "#fffbeb" : "#f0fdf4",
+                border: `1px solid ${isDanger ? "#dc2626" : isWarning ? "#fcd34d" : "#16a34a"}`,
+                borderRadius: "8px", padding: "6px 14px",
+              }}>
+                <span style={{ fontSize: "16px" }}>
+                  {isDanger ? "🔴" : isWarning ? "🟡" : "🟢"}
+                </span>
+                <span style={{
+                  fontWeight: "800", fontSize: "18px", fontFamily: "monospace",
+                  color: isDanger ? "#dc2626" : isWarning ? "#92400e" : "#15803d",
+                  letterSpacing: "1px"
+                }}>
+                  {formatTime(timeLeft)}
+                </span>
+                {isWarning && !isDanger && (
+                  <span style={{ fontSize: "11px", color: "#92400e", fontWeight: "600" }}>Almost up!</span>
+                )}
+                {isDanger && (
+                  <span style={{ fontSize: "11px", color: "#dc2626", fontWeight: "700" }}>Hurry!</span>
+                )}
+              </div>
+            )}
           </div>
           <button onClick={() => { if (confirm("Exit assessment? Progress will be lost.")) setStage("intro") }} style={btnOutline}>✕ Exit</button>
         </div>

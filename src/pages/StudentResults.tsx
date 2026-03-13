@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../supabaseClient"
+import { printStudentResults } from "./printResults"
 
 interface Props {
   studentId: string
@@ -25,9 +26,15 @@ interface RankingResult {
   courses?: { course_name: string; capacity: number }
 }
 
+interface StudentInfo {
+  lrn: string
+  school_year: string
+}
+
 export default function StudentResults({ studentId, studentName, onLogout, onRetake }: Props) {
   const [assessments, setAssessments] = useState<AssessmentResult[]>([])
   const [rankings, setRankings] = useState<RankingResult[]>([])
+  const [studentInfo, setStudentInfo] = useState<StudentInfo>({ lrn: "", school_year: "" })
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"scores" | "rankings">("scores")
 
@@ -36,20 +43,30 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
   const fetchResults = async () => {
     setLoading(true)
 
+    // Student info
+    const { data: sData } = await supabase
+      .from("students")
+      .select("lrn, school_year")
+      .eq("id", studentId)
+      .single()
+    if (sData) setStudentInfo(sData)
+
+    // Assessments
     const { data: aData } = await supabase
       .from("assessments")
       .select("*, courses(course_name)")
       .eq("student_id", studentId)
       .order("score", { ascending: false })
+    setAssessments(aData || [])
 
+    // Rankings
     const { data: rData } = await supabase
       .from("rankings")
       .select("*, courses(course_name, capacity)")
       .eq("student_id", studentId)
       .order("score", { ascending: false })
-
-    setAssessments(aData || [])
     setRankings(rData || [])
+
     setLoading(false)
   }
 
@@ -60,7 +77,37 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
   const passed = overallPct >= 50
   const takenAt = assessments[0]?.taken_at
     ? new Date(assessments[0].taken_at).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
-    : null
+    : new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
+
+  const handlePrint = () => {
+    printStudentResults({
+      studentName,
+      studentLRN: studentInfo.lrn,
+      schoolYear: studentInfo.school_year,
+      takenAt,
+      totalScore,
+      totalItems,
+      overallPercent: overallPct,
+      passed,
+      top3: top3.map(r => ({
+        course_name: r.courses?.course_name || "",
+        score: r.score,
+        status: r.status,
+      })),
+      assessments: assessments.map(a => ({
+        course_name: a.courses?.course_name || "",
+        score: a.score,
+        total_items: a.total_items,
+        passed: a.passed,
+      })),
+      rankings: rankings.map(r => ({
+        course_name: r.courses?.course_name || "",
+        score: r.score,
+        rank: r.rank,
+        status: r.status,
+      })),
+    })
+  }
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f3f4f6", width: "100%" }}>
@@ -72,7 +119,10 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
           <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Welcome, {studentName}</p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={onRetake} style={btnOutline}>📋 Retake Assessment</button>
+          {assessments.length > 0 && (
+            <button onClick={handlePrint} style={btnPrint}>🖨 Print / Save as PDF</button>
+          )}
+          <button onClick={onRetake} style={btnOutline}>📋 Retake</button>
           <button onClick={onLogout} style={btnOutline}>↪ Logout</button>
         </div>
       </div>
@@ -86,7 +136,6 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
           </div>
 
         ) : assessments.length === 0 ? (
-          /* ── No Assessment Taken ── */
           <div style={{ display: "flex", justifyContent: "center" }}>
             <div style={{ backgroundColor: "white", borderRadius: "16px", padding: "56px 48px", textAlign: "center", maxWidth: "480px", width: "100%", boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
               <p style={{ fontSize: "52px", margin: "0 0 16px" }}>📋</p>
@@ -102,7 +151,7 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
 
         ) : (
           <>
-            {/* ── Result Banner ── */}
+            {/* Result Banner */}
             <div style={{
               backgroundColor: passed ? "#f0fdf4" : "#fef2f2",
               border: `2px solid ${passed ? "#16a34a" : "#dc2626"}`,
@@ -120,9 +169,7 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
                 <p style={{ color: "#6b7280", margin: "0 0 4px" }}>
                   {passed ? "You have qualified for TVE strand enrollment." : "Keep practicing to improve your score."}
                 </p>
-                {takenAt && (
-                  <p style={{ color: "#9ca3af", fontSize: "13px", margin: 0 }}>📅 Taken: {takenAt}</p>
-                )}
+                <p style={{ color: "#9ca3af", fontSize: "13px", margin: 0 }}>📅 Taken: {takenAt}</p>
               </div>
               <div style={{ display: "flex", gap: "12px" }}>
                 {[
@@ -138,7 +185,18 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
               </div>
             </div>
 
-            {/* ── Top 3 Recommendations ── */}
+            {/* Print CTA */}
+            <div style={{ backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "12px", padding: "14px 20px", marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <p style={{ fontWeight: "700", color: "#1d4ed8", margin: "0 0 2px" }}>🖨 Save or Print Your Results</p>
+                <p style={{ color: "#3b82f6", fontSize: "13px", margin: 0 }}>Download as PDF or print a copy for your records</p>
+              </div>
+              <button onClick={handlePrint} style={btnPrint}>
+                🖨 Print / Save as PDF
+              </button>
+            </div>
+
+            {/* Top 3 Recommendations */}
             <div style={{ backgroundColor: "white", borderRadius: "16px", padding: "24px", marginBottom: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               <h3 style={{ fontWeight: "700", fontSize: "17px", margin: "0 0 4px" }}>🏆 Your Top 3 Course Recommendations</h3>
               <p style={{ color: "#6b7280", fontSize: "13px", margin: "0 0 20px" }}>Based on your assessment performance</p>
@@ -178,7 +236,7 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
               </div>
             </div>
 
-            {/* ── Sub Tabs ── */}
+            {/* Sub Tabs */}
             <div style={{ display: "flex", gap: "4px", marginBottom: "16px", backgroundColor: "white", padding: "4px", borderRadius: "10px", border: "1px solid #e5e7eb", width: "fit-content" }}>
               {(["scores", "rankings"] as const).map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)} style={{
@@ -192,7 +250,7 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
               ))}
             </div>
 
-            {/* ── Score Breakdown Table ── */}
+            {/* Score Breakdown */}
             {activeTab === "scores" && (
               <div style={{ backgroundColor: "white", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                 <h3 style={{ fontWeight: "700", fontSize: "16px", margin: "0 0 16px" }}>📊 Score Breakdown by Course</h3>
@@ -254,7 +312,7 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
               </div>
             )}
 
-            {/* ── Rankings Table ── */}
+            {/* Rankings */}
             {activeTab === "rankings" && (
               <div style={{ backgroundColor: "white", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                 <h3 style={{ fontWeight: "700", fontSize: "16px", margin: "0 0 16px" }}>🏅 Your Rankings per Course</h3>
@@ -309,3 +367,4 @@ export default function StudentResults({ studentId, studentName, onLogout, onRet
 
 const btnDark: React.CSSProperties = { padding: "10px 24px", backgroundColor: "#111827", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "14px" }
 const btnOutline: React.CSSProperties = { padding: "8px 16px", backgroundColor: "white", border: "1px solid #e5e7eb", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "14px" }
+const btnPrint: React.CSSProperties = { padding: "9px 18px", backgroundColor: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "14px" }
